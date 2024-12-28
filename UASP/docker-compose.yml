@@ -1,0 +1,91 @@
+version: "3.9"
+
+name: "uasp-akso"
+
+services:
+  # Service untuk PostgreSQL
+  postgres:
+    image: postgres:15 # Image untuk PostgreSQL
+    container_name: postgres_container # Nama container PostgreSQL
+    environment: # Variabel environment untuk PostgreSQL
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: exampledb
+    volumes: # Volume untuk menyimpan data PostgreSQL
+      - postgres_data:/var/lib/postgresql/data
+    networks: # Jaringan yang digunakan PostgreSQL
+      - postgres_network
+    deploy: # konfigurasi terkait saat deployment
+      resources: # https://docs.docker.com/reference/compose-file/deploy/#resources
+        limits: # membatasi alokasi sumberdaya untuk container ini
+          cpus: '0.5' # 0.5 artinya separuh dari jumlah core fisik yang dimiliki laptop
+          memory: 1G # 1 GByte RAM yang maksimal dialokasikan
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # Service untuk PGAdmin
+  pgadmin:
+    image: dpage/pgadmin4:6 # Image untuk PGAdmin
+    container_name: pgadmin_container # Nama container PGAdmin
+    environment: # Variabel environment untuk PGAdmin
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports: # Port mapping untuk akses PGAdmin
+      - "9090:80" # Akses melalui http://localhost:9090
+    networks: # Jaringan yang digunakan PGAdmin
+      - postgres_network
+    configs: # Konfigurasi custom untuk PGAdmin
+      - source: pgadmin_config
+        target: /pgadmin-custom-config.conf
+    depends_on: # Dependensi pada PostgreSQL
+      - postgres
+    deploy: # konfigurasi terkait saat deployment
+      resources: # https://docs.docker.com/reference/compose-file/deploy/#resources
+        limits: # membatasi alokasi sumberdaya untuk container ini
+          cpus: '0.5' # 0.5 artinya separuh dari jumlah core fisik yang dimiliki laptop
+          memory: 1G # 1 GByte RAM yang maksimal dialokasikan
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # Service untuk Nginx
+  web:
+    image: nginx:latest # Image untuk Nginx
+    container_name: nginx_container # Nama container Nginx
+    ports: # Port mapping untuk akses Nginx
+      - "8080:80" # Akses melalui http://localhost:8080
+    volumes: # Sinkronisasi folder lokal dengan container
+      - ./website:/usr/share/nginx/html
+    configs: # Konfigurasi custom untuk Nginx
+      - source: nginx_config
+        target: /etc/nginx/conf.d/nginx.conf
+    networks: # Jaringan yang digunakan Nginx
+      - web_network
+    depends_on: # Dependensi pada PostgreSQL dan PGAdmin
+      - postgres
+      - pgadmin
+    healthcheck: # Pengecekan kesehatan Nginx
+      test: ["CMD-SHELL", "curl -f http://localhost:80 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+# Definisi jaringan
+networks:
+  postgres_network:
+    driver: bridge
+  web_network:
+    driver: bridge
+
+# Definisi volume
+volumes:
+  postgres_data:
+    driver: local
+
+# Definisi konfigurasi
+configs:
+  pgadmin_config:
+    file: ./pgadmin-custom-config.conf # File konfigurasi kustom PGAdmin
+  nginx_config:
+    file: ./nginx.conf # File konfigurasi Nginx
